@@ -28,7 +28,7 @@ async function deleteFailed() {
       <header class="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 dark:border-dark-700 dark:bg-dark-900">
         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300"><Icon name="play" size="sm" :class="{ 'animate-pulse': liveness.isRunning }" /></span>
         <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.accounts.livenessPanelTitle') }}</div><div class="text-xs text-gray-500 dark:text-gray-400">{{ finished ? t('admin.accounts.livenessCompleted') : t('admin.accounts.livenessRunning') }}</div></div>
-        <button class="rounded p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-dark-700" :title="t('admin.accounts.livenessMinimize')" @click="liveness.toggleMinimized"><Icon name="minus" size="sm" /></button>
+        <button class="rounded p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-dark-700" :title="t('admin.accounts.livenessMinimize')" @click="liveness.toggleMinimized"><Icon name="chevronDown" size="sm" /></button>
         <button class="rounded p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-dark-700" :title="t('common.close')" @click="liveness.close"><Icon name="x" size="sm" /></button>
       </header>
       <div v-if="liveness.minimized" class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ task.completed }}/{{ task.total }} · {{ task.dead }} {{ t('admin.accounts.livenessDeadShort') }}</div>
