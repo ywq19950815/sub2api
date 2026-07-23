@@ -133,6 +133,12 @@
                         </span>
                         <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
                       </button>
+                      <button class="account-tools-menu-item" :disabled="testingAllAccounts" @click="handleBatchTestLiveness">
+                        <span class="account-tools-menu-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">
+                          <Icon name="play" size="sm" />
+                        </span>
+                        <span class="flex-1 text-left">{{ t('admin.accounts.batchTestLiveness') }}</span>
+                      </button>
 
                       <div class="my-2 border-t border-gray-100 dark:border-dark-700"></div>
                       <div class="px-2 py-2">
@@ -576,6 +582,7 @@ const showTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
+const testingAllAccounts = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -1236,6 +1243,39 @@ const openErrorPassthrough = () => {
 const openTLSFingerprintProfiles = () => {
   closeAccountToolsDropdown()
   showTLSFingerprintProfiles.value = true
+}
+
+const handleBatchTestLiveness = async () => {
+  closeAccountToolsDropdown()
+  if (!confirm(t('admin.accounts.batchTestLivenessConfirm'))) return
+
+  testingAllAccounts.value = true
+  try {
+    const result = await adminAPI.accounts.batchTestLiveness({
+      platform: params.platform,
+      type: params.type,
+      status: params.status,
+      group: params.group,
+      search: params.search,
+      privacy_mode: params.privacy_mode
+    })
+    const message = t('admin.accounts.batchTestLivenessResult', {
+      total: result.total,
+      alive: result.alive,
+      dead: result.dead
+    })
+    if (result.update_failed > 0) {
+      appStore.showError(`${message} ${t('admin.accounts.batchTestLivenessUpdateFailed', { count: result.update_failed })}`)
+    } else {
+      appStore.showSuccess(message)
+    }
+    await reload()
+  } catch (error) {
+    console.error('Failed to test account liveness:', error)
+    appStore.showError(extractApiErrorMessage(error))
+  } finally {
+    testingAllAccounts.value = false
+  }
 }
 
 const syncPendingListChanges = async () => {

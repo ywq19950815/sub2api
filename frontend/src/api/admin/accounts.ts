@@ -717,6 +717,36 @@ export interface BatchOperationResult {
   warnings?: Array<{ account_id: number; warning: string }>
 }
 
+export interface BatchLivenessTestFilters {
+  platform?: string
+  type?: string
+  status?: string
+  group?: string
+  search?: string
+  privacy_mode?: string
+}
+
+export interface BatchLivenessTestResult {
+  total: number
+  alive: number
+  dead: number
+  update_failed: number
+  errors: Array<{ account_id: number; error: string; update_error?: string }>
+}
+
+/**
+ * Test every account matching the current list filters. Accounts that fail are
+ * marked as errors and made unschedulable by the server.
+ */
+export async function batchTestLiveness(filters: BatchLivenessTestFilters): Promise<BatchLivenessTestResult> {
+  const { data } = await apiClient.post<BatchLivenessTestResult>(
+    '/admin/accounts/batch-test-liveness',
+    filters,
+    { timeout: 600000 }
+  )
+  return data
+}
+
 /**
  * Revert account proxy to original before fallback
  * @param id - Account ID
@@ -924,6 +954,7 @@ export const accountsAPI = {
   getAntigravityDefaultModelMapping,
   batchClearError,
   batchRefresh,
+  batchTestLiveness,
   setPrivacy,
   revertProxyFallback,
   queryOpenAIQuota,

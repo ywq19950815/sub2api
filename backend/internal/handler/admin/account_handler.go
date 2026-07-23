@@ -1074,6 +1074,107 @@ func (h *AccountHandler) Test(c *gin.Context) {
 	}
 }
 
+// BatchTestLiveness tests every account matching the supplied list filters.
+// Failed tests are persisted as account errors so the scheduler stops using them.
+// POST /api/v1/admin/accounts/batch-test-liveness
+func (h *AccountHandler) BatchTestLiveness(c *gin.Context) {
+	var req struct {
+		Platform    string `json:"platform"`
+		AccountType string `json:"type"`
+		Status      string `json:"status"`
+		Group       string `json:"group"`
+		Search      string `json:"search"`
+		PrivacyMode string `json:"privacy_mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if h.accountTestService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Account test service unavailable")
+		return
+	}
+
+	search := strings.TrimSpace(req.Search)
+	if len(search) > 100 {
+		search = search[:100]
+	}
+	privacyMode := strings.TrimSpace(req.PrivacyMode)
+	var groupID int64
+	if req.Group != "" {
+		if req.Group == accountListGroupUngroupedQueryValue {
+			groupID = service.AccountListGroupUngrouped
+		} else {
+			parsedGroupID, err := strconv.ParseInt(req.Group, 10, 64)
+			if err != nil || parsedGroupID < 0 {
+				response.ErrorFrom(c, infraerrors.BadRequest("INVALID_GROUP_FILTER", "invalid group filter"))
+				return
+			}
+			groupID = parsedGroupID
+		}
+	}
+
+	accounts, err := h.adminService.ListAccountsForSchedulerScoreFilter(
+		c.Request.Context(), req.Platform, req.AccountType, req.Status, search, groupID, privacyMode,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	const maxConcurrency = 10
+	g, gctx := errgroup.WithContext(c.Request.Context())
+	g.SetLimit(maxConcurrency)
+
+	var mu sync.Mutex
+	aliveCount, deadCount, updateFailedCount := 0, 0, 0
+	errors := make([]gin.H, 0)
+	for _, account := range accounts {
+		accountID := account.ID
+		g.Go(func() error {
+			result, testErr := h.accountTestService.RunTestBackground(gctx, accountID, "")
+			if testErr == nil && result != nil && result.Status == "success" {
+				mu.Lock()
+				aliveCount++
+				mu.Unlock()
+				return nil
+			}
+
+			errorMessage := "account liveness test failed"
+			if testErr != nil {
+				errorMessage = testErr.Error()
+			} else if result != nil && result.ErrorMessage != "" {
+				errorMessage = result.ErrorMessage
+			}
+			errorMessage = strings.TrimSpace(errorMessage)
+			if len(errorMessage) > 1000 {
+				errorMessage = errorMessage[:1000]
+			}
+
+			updateErr := h.adminService.SetAccountError(gctx, accountID, errorMessage)
+			mu.Lock()
+			deadCount++
+			errorItem := gin.H{"account_id": accountID, "error": errorMessage}
+			if updateErr != nil {
+				updateFailedCount++
+				errorItem["update_error"] = updateErr.Error()
+			}
+			errors = append(errors, errorItem)
+			mu.Unlock()
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	response.Success(c, gin.H{
+		"total":         len(accounts),
+		"alive":         aliveCount,
+		"dead":          deadCount,
+		"update_failed": updateFailedCount,
+		"errors":        errors,
+	})
+}
+
 // RecoverState handles unified recovery of recoverable account runtime state.
 // POST /api/v1/admin/accounts/:id/recover-state
 func (h *AccountHandler) RecoverState(c *gin.Context) {
