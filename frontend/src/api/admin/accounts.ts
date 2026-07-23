@@ -726,25 +726,49 @@ export interface BatchLivenessTestFilters {
   privacy_mode?: string
 }
 
-export interface BatchLivenessTestResult {
-  total: number
-  alive: number
-  dead: number
-  update_failed: number
-  errors: Array<{ account_id: number; error: string; update_error?: string }>
+export interface BatchLivenessTaskResult {
+	account_id: number
+	status: 'alive' | 'dead'
+	error?: string
+}
+
+export interface BatchLivenessTask {
+	id: string
+	state: 'running' | 'completed'
+	created_at: string
+	finished_at?: string
+	total: number
+	completed: number
+	alive: number
+	dead: number
+	update_failed: number
+	deleted: number
+	current_account_id?: number
+	recent: BatchLivenessTaskResult[]
 }
 
 /**
  * Test every account matching the current list filters. Accounts that fail are
  * marked as errors and made unschedulable by the server.
  */
-export async function batchTestLiveness(filters: BatchLivenessTestFilters): Promise<BatchLivenessTestResult> {
-  const { data } = await apiClient.post<BatchLivenessTestResult>(
-    '/admin/accounts/batch-test-liveness',
-    filters,
-    { timeout: 600000 }
-  )
-  return data
+export async function batchTestLiveness(filters: BatchLivenessTestFilters): Promise<BatchLivenessTask> {
+	const { data } = await apiClient.post<BatchLivenessTask>(
+		'/admin/accounts/batch-test-liveness',
+		filters
+	)
+	return data
+}
+
+export async function getBatchLivenessTask(taskID: string): Promise<BatchLivenessTask> {
+	const { data } = await apiClient.get<BatchLivenessTask>(`/admin/accounts/batch-test-liveness/${taskID}`)
+	return data
+}
+
+export async function deleteBatchLivenessFailed(taskID: string): Promise<{ total: number; deleted: number; failed: number }> {
+	const { data } = await apiClient.post<{ total: number; deleted: number; failed: number }>(
+		`/admin/accounts/batch-test-liveness/${taskID}/delete-failed`
+	)
+	return data
 }
 
 /**
@@ -954,7 +978,9 @@ export const accountsAPI = {
   getAntigravityDefaultModelMapping,
   batchClearError,
   batchRefresh,
-  batchTestLiveness,
+	batchTestLiveness,
+	getBatchLivenessTask,
+	deleteBatchLivenessFailed,
   setPrivacy,
   revertProxyFallback,
   queryOpenAIQuota,

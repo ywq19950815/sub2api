@@ -63,6 +63,7 @@ type AccountHandler struct {
 	tokenCacheInvalidator   service.TokenCacheInvalidator
 	grokImportProber        grokImportProber
 	upstreamBillingProbe    *service.UpstreamBillingProbeService
+	livenessTasks           *livenessTaskStore
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
@@ -102,6 +103,7 @@ func NewAccountHandler(
 		sessionLimitCache:       sessionLimitCache,
 		rpmCache:                rpmCache,
 		tokenCacheInvalidator:   tokenCacheInvalidator,
+		livenessTasks:           newLivenessTaskStore(),
 	}
 }
 
@@ -1122,57 +1124,13 @@ func (h *AccountHandler) BatchTestLiveness(c *gin.Context) {
 		return
 	}
 
-	const maxConcurrency = 10
-	g, gctx := errgroup.WithContext(c.Request.Context())
-	g.SetLimit(maxConcurrency)
-
-	var mu sync.Mutex
-	aliveCount, deadCount, updateFailedCount := 0, 0, 0
-	errors := make([]gin.H, 0)
+	accountIDs := make([]int64, 0, len(accounts))
 	for _, account := range accounts {
-		accountID := account.ID
-		g.Go(func() error {
-			result, testErr := h.accountTestService.RunTestBackground(gctx, accountID, "")
-			if testErr == nil && result != nil && result.Status == "success" {
-				mu.Lock()
-				aliveCount++
-				mu.Unlock()
-				return nil
-			}
-
-			errorMessage := "account liveness test failed"
-			if testErr != nil {
-				errorMessage = testErr.Error()
-			} else if result != nil && result.ErrorMessage != "" {
-				errorMessage = result.ErrorMessage
-			}
-			errorMessage = strings.TrimSpace(errorMessage)
-			if len(errorMessage) > 1000 {
-				errorMessage = errorMessage[:1000]
-			}
-
-			updateErr := h.adminService.SetAccountError(gctx, accountID, errorMessage)
-			mu.Lock()
-			deadCount++
-			errorItem := gin.H{"account_id": accountID, "error": errorMessage}
-			if updateErr != nil {
-				updateFailedCount++
-				errorItem["update_error"] = updateErr.Error()
-			}
-			errors = append(errors, errorItem)
-			mu.Unlock()
-			return nil
-		})
+		accountIDs = append(accountIDs, account.ID)
 	}
-	_ = g.Wait()
-
-	response.Success(c, gin.H{
-		"total":         len(accounts),
-		"alive":         aliveCount,
-		"dead":          deadCount,
-		"update_failed": updateFailedCount,
-		"errors":        errors,
-	})
+	task := h.livenessTasks.create(len(accountIDs))
+	go h.runLivenessTask(task, accountIDs)
+	response.Success(c, task.snapshot())
 }
 
 // RecoverState handles unified recovery of recoverable account runtime state.

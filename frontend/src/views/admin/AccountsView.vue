@@ -133,7 +133,7 @@
                         </span>
                         <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
                       </button>
-                      <button class="account-tools-menu-item" :disabled="testingAllAccounts" @click="handleBatchTestLiveness">
+                      <button class="account-tools-menu-item" @click="handleBatchTestLiveness">
                         <span class="account-tools-menu-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">
                           <Icon name="play" size="sm" />
                         </span>
@@ -477,6 +477,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'v
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useLivenessStore } from '@/stores/liveness'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
 import { useTableLoader } from '@/composables/useTableLoader'
@@ -522,6 +523,7 @@ import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType,
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const livenessStore = useLivenessStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
@@ -582,7 +584,6 @@ const showTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
-const testingAllAccounts = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -1246,12 +1247,15 @@ const openTLSFingerprintProfiles = () => {
 }
 
 const handleBatchTestLiveness = async () => {
-  closeAccountToolsDropdown()
-  if (!confirm(t('admin.accounts.batchTestLivenessConfirm'))) return
+	closeAccountToolsDropdown()
+	if (livenessStore.isRunning) {
+		livenessStore.open()
+		return
+	}
+	if (!confirm(t('admin.accounts.batchTestLivenessConfirm'))) return
 
-  testingAllAccounts.value = true
   try {
-    const result = await adminAPI.accounts.batchTestLiveness({
+    await livenessStore.start({
       platform: params.platform,
       type: params.type,
       status: params.status,
@@ -1259,22 +1263,9 @@ const handleBatchTestLiveness = async () => {
       search: params.search,
       privacy_mode: params.privacy_mode
     })
-    const message = t('admin.accounts.batchTestLivenessResult', {
-      total: result.total,
-      alive: result.alive,
-      dead: result.dead
-    })
-    if (result.update_failed > 0) {
-      appStore.showError(`${message} ${t('admin.accounts.batchTestLivenessUpdateFailed', { count: result.update_failed })}`)
-    } else {
-      appStore.showSuccess(message)
-    }
-    await reload()
   } catch (error) {
     console.error('Failed to test account liveness:', error)
     appStore.showError(extractApiErrorMessage(error))
-  } finally {
-    testingAllAccounts.value = false
   }
 }
 
