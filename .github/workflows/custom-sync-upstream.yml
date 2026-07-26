@@ -2,8 +2,13 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '20 3 * * *'
+    # Avoid the top of the hour, where GitHub may delay scheduled jobs.
+    - cron: '17 */4 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
 
 permissions:
   contents: write
