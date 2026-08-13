@@ -1,6 +1,9 @@
 name: Sync Upstream
 
 on:
+  push:
+    branches:
+      - custom/batch-liveness
   schedule:
     # Avoid the top of the hour, where GitHub may delay scheduled jobs.
     - cron: '17 */4 * * *'
