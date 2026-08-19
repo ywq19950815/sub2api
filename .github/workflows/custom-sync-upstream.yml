@@ -15,6 +15,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   sync:
@@ -51,3 +52,13 @@ jobs:
         run: |
           echo "::error::The merge from upstream/main has conflicts. No code or image was deployed."
           exit 1
+
+      - name: Trigger custom image build
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api \
+            --method POST \
+            repos/${{ github.repository }}/actions/workflows/custom-build-image.yml/dispatches \
+            -f ref=custom/batch-liveness

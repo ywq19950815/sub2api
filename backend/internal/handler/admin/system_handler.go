@@ -18,8 +18,9 @@ import (
 
 // SystemHandler handles system-related operations
 type SystemHandler struct {
-	updateSvc systemUpdateService
-	lockSvc   *service.SystemOperationLockService
+	updateSvc       systemUpdateService
+	lockSvc         *service.SystemOperationLockService
+	customUpdateSvc customUpdateDispatcher
 }
 
 // systemUpdateTimeout bounds a full in-place update or rollback: the release
@@ -54,8 +55,9 @@ type systemUpdateService interface {
 // NewSystemHandler creates a new SystemHandler
 func NewSystemHandler(updateSvc systemUpdateService, lockSvc *service.SystemOperationLockService) *SystemHandler {
 	return &SystemHandler{
-		updateSvc: updateSvc,
-		lockSvc:   lockSvc,
+		updateSvc:       updateSvc,
+		lockSvc:         lockSvc,
+		customUpdateSvc: newGitHubWorkflowDispatcherFromEnv(),
 	}
 }
 
@@ -83,6 +85,19 @@ func (h *SystemHandler) CheckUpdates(c *gin.Context) {
 // PerformUpdate downloads and applies the update
 // POST /api/v1/admin/system/update
 func (h *SystemHandler) PerformUpdate(c *gin.Context) {
+	if h.customUpdateSvc != nil && h.customUpdateSvc.Enabled() {
+		if err := h.customUpdateSvc.Dispatch(c.Request.Context()); err != nil {
+			response.Error(c, http.StatusBadGateway, err.Error())
+			return
+		}
+		response.Success(c, gin.H{
+			"message":          "Custom update workflow started",
+			"need_restart":     false,
+			"workflow_started": true,
+		})
+		return
+	}
+
 	operationID := buildSystemOperationID(c, "update")
 	payload := gin.H{"operation_id": operationID}
 	executeAdminIdempotentJSON(c, "admin.system.update", payload, service.DefaultSystemOperationIdempotencyTTL(), func(ctx context.Context) (any, error) {

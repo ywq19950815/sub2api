@@ -56,6 +56,10 @@ services:
       - ENABLE_SERVER_TIMING=${ENABLE_SERVER_TIMING:-false}
       - RUN_MODE=${RUN_MODE:-standard}
       - UPDATE_GITHUB_TOKEN=${UPDATE_GITHUB_TOKEN:-}
+      - CUSTOM_UPDATE_GITHUB_TOKEN=${CUSTOM_UPDATE_GITHUB_TOKEN:-}
+      - CUSTOM_UPDATE_GITHUB_REPOSITORY=${CUSTOM_UPDATE_GITHUB_REPOSITORY:-ywq19950815/sub2api}
+      - CUSTOM_UPDATE_GITHUB_WORKFLOW=${CUSTOM_UPDATE_GITHUB_WORKFLOW:-custom-sync-upstream.yml}
+      - CUSTOM_UPDATE_GITHUB_REF=${CUSTOM_UPDATE_GITHUB_REF:-custom/batch-liveness}
 
       # =======================================================================
       # Database Configuration (PostgreSQL)

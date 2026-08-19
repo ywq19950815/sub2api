@@ -176,13 +176,18 @@
                       }}
                     </p>
                     <p class="text-xs text-green-600/70 dark:text-green-400/70">
-                      {{ t('version.restartRequired') }}
+                      {{
+                        successKind === 'update' && !needRestart
+                          ? t('version.customUpdateStarted')
+                          : t('version.restartRequired')
+                      }}
                     </p>
                   </div>
                 </div>
 
                 <!-- Restart button with countdown -->
                 <button
+                  v-if="needRestart"
                   @click="handleRestart"
                   :disabled="restarting"
                   class="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -339,7 +344,7 @@
                     ></path>
                   </svg>
                   <Icon v-else name="download" size="sm" :stroke-width="2" />
-                  {{ updating ? t('version.updating') : t('version.updateNow') }}
+                  {{ updating ? t('version.updating') : t('version.customUpdateNow') }}
                 </button>
 
                 <!-- View release link -->
