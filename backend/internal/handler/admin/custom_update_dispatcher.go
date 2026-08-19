@@ -74,7 +74,9 @@ func (d *githubWorkflowDispatcher) Dispatch(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dispatch custom update workflow: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("dispatch custom update workflow: GitHub returned %s", resp.Status)
 	}
