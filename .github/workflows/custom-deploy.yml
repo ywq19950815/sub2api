@@ -29,11 +29,20 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
-          envs: IMAGE_NAME,GHCR_USERNAME,GHCR_TOKEN,DEPLOY_DIR,DEPLOY_COMPOSE_FILE
+          envs: IMAGE_NAME,GHCR_USERNAME,GHCR_TOKEN,DEPLOY_DIR,DEPLOY_COMPOSE_FILE,CUSTOM_UPDATE_GITHUB_TOKEN
           script: |
             set -eu
             cd "$DEPLOY_DIR"
-            printf '%s\n' 'services:' '  sub2api:' "    image: $IMAGE_NAME" > docker-compose.custom-image.yml
+            printf '%s\n' \
+              'services:' \
+              '  sub2api:' \
+              "    image: $IMAGE_NAME" \
+              '    environment:' \
+              '      CUSTOM_UPDATE_GITHUB_TOKEN: ${CUSTOM_UPDATE_GITHUB_TOKEN}' \
+              '      CUSTOM_UPDATE_GITHUB_REPOSITORY: ywq19950815/sub2api' \
+              '      CUSTOM_UPDATE_GITHUB_WORKFLOW: custom-sync-upstream.yml' \
+              '      CUSTOM_UPDATE_GITHUB_REF: custom/batch-liveness' \
+              > docker-compose.custom-image.yml
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
             docker compose -f "$DEPLOY_COMPOSE_FILE" -f docker-compose.custom-image.yml pull sub2api
             docker compose -f "$DEPLOY_COMPOSE_FILE" -f docker-compose.custom-image.yml up -d --no-deps sub2api
@@ -43,3 +52,4 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+          CUSTOM_UPDATE_GITHUB_TOKEN: ${{ secrets.CUSTOM_UPDATE_GITHUB_TOKEN }}
