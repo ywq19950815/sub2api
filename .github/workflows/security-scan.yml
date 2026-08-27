@@ -23,7 +23,10 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.6'
+          expected="$(sed -E 's/^go[[:space:]]+([[:alnum:].]+).*/\1/' backend/go.mod | head -n 1)"
+          actual="$(go env GOVERSION)"
+          echo "Expected ${expected}; got ${actual}"
+          test "$actual" = "go${expected}"
       - name: Run govulncheck
         working-directory: backend
         run: |
