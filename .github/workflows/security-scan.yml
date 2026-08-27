@@ -23,7 +23,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          expected="$(sed -E 's/^go[[:space:]]+([[:alnum:].]+).*/\1/' backend/go.mod | head -n 1)"
+          expected="$(awk '$1 == "go" { print $2; exit }' backend/go.mod)"
           actual="$(go env GOVERSION)"
           echo "Expected ${expected}; got ${actual}"
           test "$actual" = "go${expected}"
