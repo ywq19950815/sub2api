@@ -32,6 +32,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          PRE_MERGE_SHA="$(git rev-parse HEAD)"
           git remote add upstream https://github.com/Wei-Shaw/sub2api.git
           git fetch upstream main --tags
           if git merge-base --is-ancestor upstream/main HEAD; then
@@ -39,8 +40,20 @@ jobs:
             exit 0
           fi
           if git merge --no-edit upstream/main; then
+            # The default GITHUB_TOKEN cannot create or update workflow files.
+            # Keep the repository's custom workflow definitions while syncing
+            # all other official application code.
+            git rm -r --ignore-unmatch --quiet .github/workflows
+            git checkout "$PRE_MERGE_SHA" -- .github/workflows
+            if ! git diff --quiet --cached "$PRE_MERGE_SHA"; then
+              git commit --amend --no-edit
+            fi
             git push origin HEAD:custom/batch-liveness
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            if git diff --quiet "$PRE_MERGE_SHA"..HEAD; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
           else
             git merge --abort
             echo "changed=false" >> "$GITHUB_OUTPUT"
