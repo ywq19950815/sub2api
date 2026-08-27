@@ -40,7 +40,7 @@ jobs:
           test -s sub2api-image.tar.gz
 
       - name: Upload image to server
-        uses: appleboy/scp-action@v1.2.2
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
