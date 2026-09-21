@@ -30,6 +30,7 @@ jobs:
         id: merge
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PRE_MERGE_SHA="$(git rev-parse HEAD)"
@@ -39,31 +40,42 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git merge --no-edit upstream/main; then
-            # The default GITHUB_TOKEN cannot create or update workflow files.
-            # Keep the repository's custom workflow definitions while syncing
-            # all other official application code.
-            git rm -r --ignore-unmatch --quiet .github/workflows
-            git checkout "$PRE_MERGE_SHA" -- .github/workflows
-            if ! git diff --quiet --cached "$PRE_MERGE_SHA"; then
-              git commit --amend --no-edit
-            fi
-            git push origin HEAD:custom/batch-liveness
-            if git diff --quiet "$PRE_MERGE_SHA"..HEAD; then
+          if ! git merge --no-edit upstream/main; then
+            # Classify conflicts. Conflicts inside .github/workflows are always
+            # auto-resolved (upstream wins): those files get reverted to the
+            # pre-merge state before push anyway, because the default
+            # GITHUB_TOKEN cannot push workflow file changes. Any other
+            # conflict touches custom code and needs manual resolution.
+            if git diff --name-only --diff-filter=U | grep -v '^\.github/workflows/' | grep -q .; then
+              git merge --abort
               echo "changed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "changed=true" >> "$GITHUB_OUTPUT"
+              echo "conflict=true" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-          else
-            git merge --abort
+            echo "Workflow-only conflicts detected; auto-resolving with upstream versions..."
+            git diff --name-only --diff-filter=U | xargs -r git checkout --theirs --
+            git add -A .github/workflows
+            git commit --no-edit
+          fi
+          # The default GITHUB_TOKEN cannot create or update workflow files.
+          # Keep the repository's custom workflow definitions while syncing
+          # all other official application code.
+          git rm -r --ignore-unmatch --quiet .github/workflows
+          git checkout "$PRE_MERGE_SHA" -- .github/workflows
+          if ! git diff --quiet --cached "$PRE_MERGE_SHA"; then
+            git commit --amend --no-edit
+          fi
+          git push origin HEAD:custom/batch-liveness
+          if git diff --quiet "$PRE_MERGE_SHA"..HEAD; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Stop after merge conflict
         if: steps.merge.outputs.conflict == 'true'
         run: |
-          echo "::error::The merge from upstream/main has conflicts. No code or image was deployed."
+          echo "::error::The merge from upstream/main has conflicts outside .github/workflows (custom code needs manual resolution). No code or image was deployed."
           exit 1
 
       - name: Trigger custom image build
